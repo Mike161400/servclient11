@@ -1,4 +1,4 @@
-﻿services:
+﻿services:  # ← ОБЯЗАТЕЛЬНО должен быть ключ services!
   postgres:
     image: postgres:15-alpine
     container_name: autoservice-postgres
@@ -6,6 +6,8 @@
       POSTGRES_DB: autoservice_db
       POSTGRES_USER: autoservice
       POSTGRES_PASSWORD: autoservice123
+      LANG: ru_RU.UTF-8
+      LC_ALL: ru_RU.UTF-8
     ports:
       - "5432:5432"
     volumes:

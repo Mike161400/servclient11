@@ -1,4 +1,5 @@
 ﻿-- init-db.sql
+SET client_encoding = 'UTF8';
 DROP TABLE IF EXISTS completed_services CASCADE;
 DROP TABLE IF EXISTS required_services CASCADE;
 DROP TABLE IF EXISTS order_parts CASCADE;
