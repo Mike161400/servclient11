@@ -1,136 +1,144 @@
 package com.rentalservice.service;
 
 import com.rentalservice.model.ServiceOrder;
+import com.rentalservice.repository.ServiceOrderRepository;
+import com.rentalservice.repository.PartRepository;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class ServiceOrderService {
-    private final List<ServiceOrder> serviceOrders = new ArrayList<>();
-    private Long nextId = 1L;
-    private final PartService partService;
 
-    // 📝 Конструктор с зависимостью от PartService (Dependency Injection)
-    public ServiceOrderService(PartService partService) {
-        this.partService = partService;
+    private final ServiceOrderRepository serviceOrderRepository;
+    private final PartRepository partRepository;
+
+    public ServiceOrderService(ServiceOrderRepository serviceOrderRepository,
+                               PartRepository partRepository) {
+        this.serviceOrderRepository = serviceOrderRepository;
+        this.partRepository = partRepository;
     }
 
     // 📋 Получить все заказы
     public List<ServiceOrder> getAllServiceOrders() {
-        return new ArrayList<>(serviceOrders);
+        return serviceOrderRepository.findAll();
     }
 
     // ➕ Создать новый заказ-наряд
     public ServiceOrder createServiceOrder(ServiceOrder serviceOrder) {
-        serviceOrder.setId(nextId++);
-        serviceOrder.setStatus("CREATED"); // Устанавливаем статус при создании
-        serviceOrders.add(serviceOrder);
-        return serviceOrder;
+        if (serviceOrder.getCreationDate() == null) {
+            serviceOrder.setCreationDate(LocalDate.now());
+        }
+        serviceOrder.setStatus("CREATED");
+        return serviceOrderRepository.save(serviceOrder);
     }
 
     // ✏️ Обновить заказ
     public ServiceOrder updateServiceOrder(Long id, ServiceOrder updatedServiceOrder) {
-        for (ServiceOrder order : serviceOrders) {
-            if (order.getId().equals(id)) {
-                // Обновляем все поля кроме ID
-                order.setVehicleId(updatedServiceOrder.getVehicleId());
-                order.setMechanicId(updatedServiceOrder.getMechanicId());
-                order.setCreationDate(updatedServiceOrder.getCreationDate());
-                order.setCompletionDate(updatedServiceOrder.getCompletionDate());
-                order.setStatus(updatedServiceOrder.getStatus());
-                order.setLaborCost(updatedServiceOrder.getLaborCost());
+        return serviceOrderRepository.findById(id)
+                .map(order -> {
+                    order.setVehicleId(updatedServiceOrder.getVehicleId());
+                    order.setMechanicId(updatedServiceOrder.getMechanicId());
+                    order.setLaborCost(updatedServiceOrder.getLaborCost());
+                    order.setStatus(updatedServiceOrder.getStatus());
 
-                // Создаем новые списки чтобы избежать shared mutable state
-                order.setPartIds(new ArrayList<>(updatedServiceOrder.getPartIds()));
-                order.setRequiredServices(new ArrayList<>(updatedServiceOrder.getRequiredServices()));
-                order.setCompletedServices(new ArrayList<>(updatedServiceOrder.getCompletedServices()));
+                    if (updatedServiceOrder.getPartIds() != null) {
+                        order.setPartIds(updatedServiceOrder.getPartIds());
+                    }
+                    if (updatedServiceOrder.getRequiredServices() != null) {
+                        order.setRequiredServices(updatedServiceOrder.getRequiredServices());
+                    }
+                    if (updatedServiceOrder.getCompletedServices() != null) {
+                        order.setCompletedServices(updatedServiceOrder.getCompletedServices());
+                    }
 
-                return order;
-            }
-        }
-        return null; // заказ не найден
+                    return serviceOrderRepository.save(order);
+                })
+                .orElseThrow(() -> new IllegalArgumentException("Заказ не найден"));
     }
 
     // 🗑️ Удалить заказ
     public boolean deleteServiceOrder(Long id) {
-        return serviceOrders.removeIf(order -> order.getId().equals(id));
+        if (serviceOrderRepository.existsById(id)) {
+            serviceOrderRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 
     // 🔍 Найти заказ по ID
     public ServiceOrder getServiceOrderById(Long id) {
-        return serviceOrders.stream()
-                .filter(order -> order.getId().equals(id))
-                .findFirst()
-                .orElse(null);
+        return serviceOrderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Заказ не найден"));
     }
 
-    // 💰 ОСНОВНАЯ ЛОГИКА: Расчет общей стоимости заказа
+    // 💰 Расчет общей стоимости заказа
     public double calculateTotalCost(Long orderId) {
         ServiceOrder order = getServiceOrderById(orderId);
-        if (order == null) return 0.0;
 
-        // Сумма стоимости всех деталей в заказе
         double partsCost = order.getPartIds().stream()
-                .mapToDouble(partService::getPartPrice) // для каждого ID детали получаем цену
+                .mapToDouble(partId -> partRepository.findById(partId)
+                        .map(part -> part.getPrice())
+                        .orElse(0.0))
                 .sum();
 
-        // Общая стоимость = стоимость деталей + стоимость работ
         return partsCost + order.getLaborCost();
     }
 
     // ✅ Добавить выполненную работу в заказ
     public ServiceOrder addCompletedService(Long orderId, String service) {
         ServiceOrder order = getServiceOrderById(orderId);
-        if (order != null) {
-            order.addCompletedService(service);
+
+        if (!order.getCompletedServices().contains(service)) {
+            order.getCompletedServices().add(service);
 
             // Автоматически меняем статус на "IN_PROGRESS" если начали работы
             if ("CREATED".equals(order.getStatus())) {
                 order.setStatus("IN_PROGRESS");
             }
-            return order;
+
+            return serviceOrderRepository.save(order);
         }
-        return null; // заказ не найден
+        return order;
     }
 
     // 🚗 Закрыть заказ (только если все обязательные работы выполнены)
     public ServiceOrder completeOrder(Long orderId) {
         ServiceOrder order = getServiceOrderById(orderId);
-        if (order != null && order.canBeCompleted()) {
+
+        if (order.canBeCompleted()) {
             order.setStatus("COMPLETED");
-            order.setCompletionDate(java.time.LocalDate.now().toString());
-            return order;
+            order.setCompletionDate(LocalDate.now());
+            return serviceOrderRepository.save(order);
         }
-        return null; // Нельзя закрыть - не все работы выполнены
+        throw new IllegalStateException("Нельзя закрыть заказ - не все работы выполнены");
     }
 
     // 📊 Получить заказы по статусу
     public List<ServiceOrder> getOrdersByStatus(String status) {
-        return serviceOrders.stream()
-                .filter(order -> order.getStatus().equals(status))
-                .collect(Collectors.toList());
+        return serviceOrderRepository.findByStatus(status);
     }
 
     // 👨‍🔧 Получить заказы по механику
     public List<ServiceOrder> getOrdersByMechanic(Long mechanicId) {
-        return serviceOrders.stream()
-                .filter(order -> order.getMechanicId().equals(mechanicId))
-                .collect(Collectors.toList());
+        return serviceOrderRepository.findByMechanicId(mechanicId);
     }
 
     // 🔍 Проверить можно ли закрыть заказ
     public boolean canCompleteOrder(Long orderId) {
         ServiceOrder order = getServiceOrderById(orderId);
-        return order != null && order.canBeCompleted();
+        return order.canBeCompleted();
     }
 
     // 📈 Получить статистику по заказам
     public String getOrderStatistics() {
-        long created = getOrdersByStatus("CREATED").size();
-        long inProgress = getOrdersByStatus("IN_PROGRESS").size();
-        long completed = getOrdersByStatus("COMPLETED").size();
+        long created = serviceOrderRepository.countByStatus("CREATED");
+        long inProgress = serviceOrderRepository.countByStatus("IN_PROGRESS");
+        long completed = serviceOrderRepository.countByStatus("COMPLETED");
 
         return String.format("Заказы: CREATED=%d, IN_PROGRESS=%d, COMPLETED=%d",
                 created, inProgress, completed);

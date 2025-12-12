@@ -1,51 +1,72 @@
 package com.rentalservice.service;
 
 import com.rentalservice.model.Customer;
+import com.rentalservice.repository.CustomerRepository;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
+@Transactional
 public class CustomerService {
-    private final List<Customer> customers = new ArrayList<>();
-    private Long nextId = 1L;
 
-    // 📋 Получить всех клиентов
+    private final CustomerRepository customerRepository;
+
+    public CustomerService(CustomerRepository customerRepository) {
+        this.customerRepository = customerRepository;
+    }
+
     public List<Customer> getAllCustomers() {
-        return new ArrayList<>(customers); // возвращаем копию для безопасности
+        return customerRepository.findAll();
     }
 
-    // ➕ Создать нового клиента
     public Customer createCustomer(Customer customer) {
-        customer.setId(nextId++);
-        customers.add(customer);
-        return customer;
-    }
-
-    // ✏️ Обновить данные клиента
-    public Customer updateCustomer(Long id, Customer updatedCustomer) {
-        for (Customer customer : customers) {
-            if (customer.getId().equals(id)) {
-                customer.setName(updatedCustomer.getName());
-                customer.setPhoneNumber(updatedCustomer.getPhoneNumber());
-                customer.setEmail(updatedCustomer.getEmail());
-                customer.setAddress(updatedCustomer.getAddress());
-                return customer;
-            }
+        // Проверяем уникальность email и телефона
+        if (customerRepository.existsByEmail(customer.getEmail())) {
+            throw new IllegalArgumentException("Email уже используется");
         }
-        return null; // клиент не найден
+        if (customerRepository.existsByPhoneNumber(customer.getPhoneNumber())) {
+            throw new IllegalArgumentException("Номер телефона уже используется");
+        }
+
+        return customerRepository.save(customer);
     }
 
-    // 🗑️ Удалить клиента
+    public Customer updateCustomer(Long id, Customer updatedCustomer) {
+        return customerRepository.findById(id)
+                .map(customer -> {
+                    // Проверяем уникальность email
+                    if (!customer.getEmail().equals(updatedCustomer.getEmail())
+                            && customerRepository.existsByEmail(updatedCustomer.getEmail())) {
+                        throw new IllegalArgumentException("Email уже используется");
+                    }
+
+                    // Проверяем уникальность телефона
+                    if (!customer.getPhoneNumber().equals(updatedCustomer.getPhoneNumber())
+                            && customerRepository.existsByPhoneNumber(updatedCustomer.getPhoneNumber())) {
+                        throw new IllegalArgumentException("Номер телефона уже используется");
+                    }
+
+                    customer.setName(updatedCustomer.getName());
+                    customer.setPhoneNumber(updatedCustomer.getPhoneNumber());
+                    customer.setEmail(updatedCustomer.getEmail());
+                    customer.setAddress(updatedCustomer.getAddress());
+
+                    return customerRepository.save(customer);
+                })
+                .orElseThrow(() -> new IllegalArgumentException("Клиент не найден"));
+    }
+
     public boolean deleteCustomer(Long id) {
-        return customers.removeIf(customer -> customer.getId().equals(id));
+        if (customerRepository.existsById(id)) {
+            customerRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 
-    // 🔍 Найти клиента по ID
     public Customer getCustomerById(Long id) {
-        return customers.stream()
-                .filter(customer -> customer.getId().equals(id))
-                .findFirst()
-                .orElse(null); // возвращаем null если не найден
+        return customerRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Клиент не найден"));
     }
 }
