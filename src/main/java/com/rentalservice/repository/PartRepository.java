@@ -18,11 +18,15 @@ public interface PartRepository extends JpaRepository<Part, Long> {
     @Query("SELECT p FROM Part p WHERE p.quantityInStock < p.minQuantity")
     List<Part> findLowStockParts();
 
-    List<Part> findByQuantityInStockLessThan(int quantity);
+    List<Part> findByQuantityInStockLessThan(int quantity); // ← ЭТОТ МЕТОД ЕСТЬ
 
     @Query("SELECT p FROM Part p WHERE p.price BETWEEN :minPrice AND :maxPrice")
     List<Part> findByPriceBetween(double minPrice, double maxPrice);
 
     @Query("SELECT p FROM Part p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))")
     List<Part> findByNameContainingIgnoreCase(String name);
+
+    // ДОБАВЬ ЭТОТ МЕТОД для бизнес-операции 4:
+    @Query("SELECT p FROM Part p WHERE p.quantityInStock < :threshold")
+    List<Part> findByQuantityInStockLessThanThreshold(int threshold);
 }

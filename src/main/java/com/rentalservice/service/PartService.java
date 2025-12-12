@@ -1,58 +1,72 @@
 package com.rentalservice.service;
 
 import com.rentalservice.model.Part;
+import com.rentalservice.repository.PartRepository;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
+@Transactional
 public class PartService {
-    private final List<Part> parts = new ArrayList<>();
-    private Long nextId = 1L;
 
-    // 📋 Получить все детали
+    private final PartRepository partRepository;
+
+    public PartService(PartRepository partRepository) {
+        this.partRepository = partRepository;
+    }
+
     public List<Part> getAllParts() {
-        return new ArrayList<>(parts);
+        return partRepository.findAll();
     }
 
-    // ➕ Создать деталь
     public Part createPart(Part part) {
-        part.setId(nextId++);
-        parts.add(part);
-        return part;
-    }
-
-    // ✏️ Обновить деталь
-    public Part updatePart(Long id, Part updatedPart) {
-        for (Part part : parts) {
-            if (part.getId().equals(id)) {
-                part.setName(updatedPart.getName());
-                part.setPartNumber(updatedPart.getPartNumber());
-                part.setDescription(updatedPart.getDescription());
-                part.setPrice(updatedPart.getPrice());
-                part.setQuantityInStock(updatedPart.getQuantityInStock());
-                return part;
-            }
+        // Проверяем уникальность артикула
+        if (partRepository.existsByPartNumber(part.getPartNumber())) {
+            throw new IllegalArgumentException("Деталь с таким артикулом уже существует");
         }
-        return null; // деталь не найдена
+
+        return partRepository.save(part);
     }
 
-    // 🗑️ Удалить деталь
+    public Part updatePart(Long id, Part updatedPart) {
+        return partRepository.findById(id)
+                .map(part -> {
+                    // Проверяем уникальность артикула если изменился
+                    if (!part.getPartNumber().equals(updatedPart.getPartNumber())
+                            && partRepository.existsByPartNumber(updatedPart.getPartNumber())) {
+                        throw new IllegalArgumentException("Деталь с таким артикулом уже существует");
+                    }
+
+                    part.setName(updatedPart.getName());
+                    part.setPartNumber(updatedPart.getPartNumber());
+                    part.setDescription(updatedPart.getDescription());
+                    part.setPrice(updatedPart.getPrice());
+                    part.setQuantityInStock(updatedPart.getQuantityInStock());
+                    part.setMinQuantity(updatedPart.getMinQuantity());
+                    part.setSupplier(updatedPart.getSupplier());
+                    part.setCategory(updatedPart.getCategory());
+
+                    return partRepository.save(part);
+                })
+                .orElseThrow(() -> new IllegalArgumentException("Деталь не найдена"));
+    }
+
     public boolean deletePart(Long id) {
-        return parts.removeIf(part -> part.getId().equals(id));
+        if (partRepository.existsById(id)) {
+            partRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 
-    // 🔍 Найти деталь по ID
     public Part getPartById(Long id) {
-        return parts.stream()
-                .filter(part -> part.getId().equals(id))
-                .findFirst()
-                .orElse(null);
+        return partRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Деталь не найдена"));
     }
 
-    // 💰 Получить цену детали (для расчета стоимости заказа)
     public double getPartPrice(Long partId) {
         Part part = getPartById(partId);
-        return part != null ? part.getPrice() : 0.0;
+        return part.getPrice();
     }
 }

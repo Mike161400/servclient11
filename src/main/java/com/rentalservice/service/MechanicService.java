@@ -1,57 +1,75 @@
 package com.rentalservice.service;
 
 import com.rentalservice.model.Mechanic;
+import com.rentalservice.repository.MechanicRepository;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
-import java.util.Optional;
 
 @Service
+@Transactional
 public class MechanicService {
-    private List<Mechanic> mechanics = new ArrayList<>();
-    private Long nextId = 1L;
 
-    // 📋 Получить всех механиков
+    private final MechanicRepository mechanicRepository;
+
+    public MechanicService(MechanicRepository mechanicRepository) {
+        this.mechanicRepository = mechanicRepository;
+    }
+
     public List<Mechanic> getAll() {
-        return new ArrayList<>(mechanics);
+        return mechanicRepository.findAll();
     }
 
-    // ➕ Создать механика
     public Mechanic create(Mechanic mechanic) {
-        mechanic.setId(nextId++);
-        mechanics.add(mechanic);
-        return mechanic;
-    }
-
-    // ✏️ Обновить данные механика
-    public Mechanic update(Long id, Mechanic updatedMechanic) {
-        Optional<Mechanic> existing = mechanics.stream()
-                .filter(mechanic -> mechanic.getId().equals(id))
-                .findFirst();
-
-        if (existing.isPresent()) {
-            Mechanic mechanic = existing.get();
-            mechanic.setName(updatedMechanic.getName());
-            mechanic.setPhoneNumber(updatedMechanic.getPhoneNumber());
-            mechanic.setEmail(updatedMechanic.getEmail());
-            mechanic.setSpecialization(updatedMechanic.getSpecialization());
-            mechanic.setExperienceYears(updatedMechanic.getExperienceYears());
-            return mechanic;
-        } else {
-            return null; // механик не найден
+        // Проверяем уникальность email и телефона
+        if (mechanicRepository.existsByEmail(mechanic.getEmail())) {
+            throw new IllegalArgumentException("Механик с таким email уже существует");
         }
+        if (mechanicRepository.existsByPhoneNumber(mechanic.getPhoneNumber())) {
+            throw new IllegalArgumentException("Механик с таким номером телефона уже существует");
+        }
+
+        return mechanicRepository.save(mechanic);
     }
 
-    // 🗑️ Удалить механика
+    public Mechanic update(Long id, Mechanic updatedMechanic) {
+        return mechanicRepository.findById(id)
+                .map(mechanic -> {
+                    // Проверяем уникальность email если изменился
+                    if (!mechanic.getEmail().equals(updatedMechanic.getEmail())
+                            && mechanicRepository.existsByEmail(updatedMechanic.getEmail())) {
+                        throw new IllegalArgumentException("Механик с таким email уже существует");
+                    }
+
+                    // Проверяем уникальность телефона если изменился
+                    if (!mechanic.getPhoneNumber().equals(updatedMechanic.getPhoneNumber())
+                            && mechanicRepository.existsByPhoneNumber(updatedMechanic.getPhoneNumber())) {
+                        throw new IllegalArgumentException("Механик с таким номером телефона уже существует");
+                    }
+
+                    mechanic.setName(updatedMechanic.getName());
+                    mechanic.setPhoneNumber(updatedMechanic.getPhoneNumber());
+                    mechanic.setEmail(updatedMechanic.getEmail());
+                    mechanic.setSpecialization(updatedMechanic.getSpecialization());
+                    mechanic.setExperienceYears(updatedMechanic.getExperienceYears());
+                    mechanic.setHourlyRate(updatedMechanic.getHourlyRate());
+                    mechanic.setActive(updatedMechanic.isActive());
+
+                    return mechanicRepository.save(mechanic);
+                })
+                .orElseThrow(() -> new IllegalArgumentException("Механик не найден"));
+    }
+
     public boolean delete(Long id) {
-        return mechanics.removeIf(mechanic -> mechanic.getId().equals(id));
+        if (mechanicRepository.existsById(id)) {
+            mechanicRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 
-    // 🔍 Найти механика по ID
     public Mechanic getById(Long id) {
-        return mechanics.stream()
-                .filter(mechanic -> mechanic.getId().equals(id))
-                .findFirst()
-                .orElse(null);
+        return mechanicRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Механик не найден"));
     }
 }
