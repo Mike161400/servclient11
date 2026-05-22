@@ -1,0 +1,77 @@
+name: Build and Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    env:
+      APP_JWT_SECRET: test-jwt-secret-test-jwt-secret-test-jwt-secret
+      APP_JWT_ACCESS_TOKEN_TTL_MINUTES: 15
+      APP_JWT_REFRESH_TOKEN_TTL_DAYS: 7
+      APP_EDS_KEY_STORE_PATH: ""
+      APP_EDS_KEY_STORE_TYPE: PKCS12
+      APP_EDS_KEY_STORE_PASSWORD: changeit
+      APP_EDS_KEY_ALIAS: test
+      APP_EDS_KEY_PASSWORD: changeit
+      APP_EDS_ALGORITHM: SHA256withRSA
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Make Maven wrapper executable
+        run: chmod +x mvnw
+
+      - name: Run tests
+        run: ./mvnw test
+
+  build:
+    name: Build jar
+    runs-on: ubuntu-latest
+    needs: test
+
+    env:
+      APP_JWT_SECRET: test-jwt-secret-test-jwt-secret-test-jwt-secret
+      APP_JWT_ACCESS_TOKEN_TTL_MINUTES: 15
+      APP_JWT_REFRESH_TOKEN_TTL_DAYS: 7
+      APP_EDS_KEY_STORE_PATH: ""
+      APP_EDS_KEY_STORE_TYPE: PKCS12
+      APP_EDS_KEY_STORE_PASSWORD: changeit
+      APP_EDS_KEY_ALIAS: test
+      APP_EDS_KEY_PASSWORD: changeit
+      APP_EDS_ALGORITHM: SHA256withRSA
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Make Maven wrapper executable
+        run: chmod +x mvnw
+
+      - name: Build package
+        run: ./mvnw package -DskipTests
+
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: target/*.jar

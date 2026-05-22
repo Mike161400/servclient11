@@ -1,0 +1,47 @@
+CREATE TABLE IF NOT EXISTS auth_roles (
+    id UUID PRIMARY KEY,
+    name VARCHAR(32) NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth_users (
+    id UUID PRIMARY KEY,
+    username VARCHAR(64) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth_user_roles (
+    user_id UUID NOT NULL,
+    role_id UUID NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    CONSTRAINT fk_auth_user_roles_user
+        FOREIGN KEY (user_id) REFERENCES auth_users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_auth_user_roles_role
+        FOREIGN KEY (role_id) REFERENCES auth_roles (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    token_value VARCHAR(512) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_auth_refresh_tokens_user
+        FOREIGN KEY (user_id) REFERENCES auth_users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_id
+    ON auth_refresh_tokens (user_id);
+
+INSERT INTO auth_roles (id, name, created_at, updated_at)
+VALUES
+    ('00000000-0000-0000-0000-000000000001', 'ADMIN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000002', 'USER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (name) DO NOTHING;
